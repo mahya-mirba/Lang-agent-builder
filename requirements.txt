@@ -1,0 +1,10 @@
+langchain
+langgraph
+langchain-google-genai
+langchain-core
+langchain_mcp_adapters
+fastapi
+uvicorn
+httpx
+pydantic
+a2a-sdk

@@ -1,0 +1,12 @@
+app_name: "SimpleAgent"
+version: "1.0.0"
+framework: "langgraph"
+agent_card:
+  name: "Simple Test Agent"
+  description: "A simple test agent"
+agents:
+  root:
+    simple_agent:
+      type: "llm"
+      description: "Test agent"
+      instructions: "You are a test agent."
