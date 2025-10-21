@@ -19,7 +19,6 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
-# NEW: reducers for accumulating state
 from typing_extensions import TypedDict, Annotated
 from operator import add
 
@@ -39,7 +38,6 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 DEFAULT_MODEL = "gemini-2.5-flash"
 logger = logging.getLogger(__name__)
 
-# ---- FIX 1: Use a TypedDict with reducers so messages accumulate
 class AgentState(TypedDict):
     messages: Annotated[List[Any], add]  # accumulate across steps
     content: str
@@ -75,7 +73,6 @@ class ToolBuilder:
     async def close(self):
         if self._mcp_client:
             logger.info("Closing MCP client")
-            # (The adapter currently doesn't expose an explicit close.)
 
 class RootAgent:
     app_name: str
@@ -87,7 +84,6 @@ class RootAgent:
     _shared_httpx_client: httpx.AsyncClient | None = None
     app_config: AppConfig
 
-    # ---- FIX 2: keep store separate; don't pass it into InMemorySaver
     memory_store: InMemoryStore
 
     def __init__(self, config: dict[str, Any]):
@@ -106,8 +102,6 @@ class RootAgent:
     @staticmethod
     def construct_agent_card(root_agent: BaseAgentModel, a2a_card_model: DefaultAgentCard) -> AgentCard:
         return AgentCard(
-            name=root_agent.name,
-            description=root_agent.description,
             **a2a_card_model.model_dump(exclude_none=True),
         )
 
@@ -240,13 +234,11 @@ class RootAgent:
         else:
             raise ValueError(f"Agent type '{agent_model.type}' is not supported in this non-sub-agent version.")
 
-        # ---- FIX 3: StateGraph uses our AgentState (with reducers)
         builder = StateGraph(AgentState)
         builder.add_node("agent", self.root_agent)
         builder.set_entry_point("agent")
         builder.add_edge("agent", END)
 
-        # ---- FIX 4: Proper checkpointer + store wiring
         checkpointer = InMemorySaver()                   # no args
         self.graph = builder.compile(checkpointer=checkpointer, store=self.memory_store)
 
@@ -266,7 +258,7 @@ class RootAgent:
         elif "messages" not in input_data and "content" in input_data:
             input_data["messages"] = [HumanMessage(content=input_data["content"])]
 
-        # ---- FIX 5: Always pass thread_id (and user_id) so memory persists
+        # Always pass thread_id (and user_id) so memory persists
         config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
         result = await self.graph.ainvoke(input_data, config=config)
         return result
