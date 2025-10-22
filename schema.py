@@ -29,7 +29,7 @@ class DefaultAgentCard(AgentCard):
         organization='capgemini', url='https://www.capgemini.com/'
     )
     version: str = Field(default='1.0.0')
-    url: str = 'https://agent.a2a'
+    url: str = Field(default="http://localhost:5000")
 
 
 # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxA2A Agent Cardxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx#

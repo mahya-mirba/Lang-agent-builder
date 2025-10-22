@@ -13,7 +13,7 @@ from a2a.server.tasks import InMemoryTaskStore
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from langchain_core.messages import HumanMessage
-
+from agent_executor import LangGraphA2AExecutor
 from agent import RootAgent
 from config_resolvers.utils import get_resolver
 
@@ -65,46 +65,16 @@ async def cmd_app(agent: RootAgent) -> None:
 DEFAULT_TASK_STORE = InMemoryTaskStore()
 
 
-class A2aAgentExecutorAdapter:
-    """Adapts LangGraph/LangChain agent to work with A2A protocol."""
-    
-    def __init__(self, agent: RootAgent):
-        self.agent = agent
-        
-    async def execute(self, input_str: str, task_id: str, **kwargs) -> Dict[str, Any]:
-        """Execute the agent with the given input."""
-        try:
-            result = await self.agent.invoke(input_str)
-            
-            # Extract the response
-            response_key = next((key for key in result.keys() if key.endswith('_response')), None)
-            output = result.get(response_key, str(result)) if response_key else str(result)
-            
-            return {
-                "output": output,
-                "task_id": task_id,
-                "status": "completed"
-            }
-        except Exception as e:
-            logger.exception("Error executing agent")
-            return {
-                "output": f"Error: {str(e)}",
-                "task_id": task_id,
-                "status": "failed"
-            }
-
-
 def build_fastapi(agent: RootAgent) -> FastAPI:
     """Builds and returns fastapi app for agent."""
     root_agent_name = next(iter(agent.app_config.agents.root.keys()))
-    # Get the root agent spec (Pydantic model)
     root_agent = agent.app_config.agents.root[root_agent_name]
     agent_card = RootAgent.construct_agent_card(
         root_agent, agent.app_config.agent_card
     )
     
-    # Create adapter to make LangGraph agent compatible with A2A protocol
-    agent_executor = A2aAgentExecutorAdapter(agent=agent)
+    # Use the A2A-compliant executor
+    agent_executor = LangGraphA2AExecutor(agent=agent)
     
     request_handler = DefaultRequestHandler(
         agent_executor=agent_executor, task_store=DEFAULT_TASK_STORE
@@ -115,17 +85,18 @@ def build_fastapi(agent: RootAgent) -> FastAPI:
     
     app = a2a_app.build()
     
-    # Add additional routes for direct interaction
+    # Keep your custom endpoints
     @app.post("/generate")
     async def generate(request: Request) -> JSONResponse:
-        """Simple endpoint for direct agent invocation."""
         data = await request.json()
         input_text = data.get("input", "")
-        result = await agent.invoke(input_text)
+        thread_id = data.get("thread_id", "default")
+        user_id = data.get("user_id", "anon")
         
-        # Extract the response
+        result = await agent.invoke(input_text, thread_id=thread_id, user_id=user_id)
+        
         response_key = next((key for key in result.keys() if key.endswith('_response')), None)
-        output = result.get(response_key, str(result)) if response_key else str(result)
+        output = result.get(response_key, "") if response_key else str(result)
         
         return JSONResponse({"output": output})
     
